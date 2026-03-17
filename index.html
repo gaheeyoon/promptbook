@@ -254,6 +254,9 @@
       .action-btn.copy-btn { background: var(--accent-vw); color: white; border-color: var(--accent-vw); }
       .action-btn.copy-btn:hover { background: #0052a3; }
       .action-btn.copy-btn.copied { background: var(--success); border-color: var(--success); }
+      .action-btn.copy-btn.was-copied { background: #6c757d; border-color: #6c757d; }
+      .action-btn.copy-btn.was-copied:hover { background: #565e64; }
+      .action-btn.copy-btn.copied.was-copied { background: var(--success); border-color: var(--success); }
       .action-btn.edit-btn:hover { color: var(--accent-vw); border-color: var(--accent-vw); }
       .action-btn.delete-btn:hover { color: var(--accent-red); border-color: var(--accent-red); }
 
@@ -1103,6 +1106,7 @@
         btn.querySelector("span").textContent = "복사 완료!";
         setTimeout(() => {
           btn.classList.remove("copied");
+          btn.classList.add("was-copied");
           btn.querySelector("span").textContent = "복사하기";
         }, 2000);
       }
