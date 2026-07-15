@@ -270,6 +270,16 @@
       .prompt-card.dragging { opacity: 0.4; }
       .prompt-card.drag-over { border-top: 3px solid var(--accent-vw); background: #f0f9ff; }
 
+      /* Session drag handle */
+      .session-group.dragging { opacity: 0.4; }
+      .session-group.drag-over { outline: 2px solid var(--accent-vw); border-radius: var(--radius-lg); }
+      .session-drag-handle {
+        display: flex; align-items: center; justify-content: center;
+        width: 20px; min-width: 20px; cursor: grab; color: var(--text-muted);
+        margin-right: 4px;
+      }
+      .session-drag-handle:active { cursor: grabbing; }
+
       /* Instruction Cards (accordion) */
       .instruction-list { display: flex; flex-direction: column; gap: 1rem; }
 
@@ -795,9 +805,10 @@
           `).join("");
 
           return `
-            <div class="session-group" id="session-${session.id}">
+            <div class="session-group" id="session-${session.id}" ${isAdmin ? `draggable="true" data-session-group-id="${session.id}"` : ''}>
               <div class="session-header" onclick="toggleSession(${session.id})">
                 <div class="session-header-left">
+                  ${isAdmin ? `<div class="session-drag-handle" onclick="event.stopPropagation()">${ICON.grip}</div>` : ''}
                   <span class="session-day">${dayNum}교시</span>
                   <span class="session-name">${escapeHtml(session.name)}</span>
                   <span class="session-prompt-count">${sessionPrompts.length}개</span>
@@ -828,18 +839,21 @@
         }).join("");
 
         attachDragListeners();
+        attachSessionDragListeners();
       }
 
       // ============================================================
       // 드래그 앤 드롭 (프롬프트 순서 변경)
       // ============================================================
       let dragSrcId = null;
+      let dragSessionSrcId = null;
 
       function attachDragListeners() {
         if (!isAdmin) return;
         document.querySelectorAll('.prompt-card[draggable="true"]').forEach(card => {
           card.addEventListener('dragstart', e => {
             dragSrcId = card.dataset.promptId;
+            dragSessionSrcId = null;
             card.classList.add('dragging');
             e.dataTransfer.effectAllowed = 'move';
           });
@@ -848,12 +862,14 @@
             document.querySelectorAll('.prompt-card').forEach(c => c.classList.remove('drag-over'));
           });
           card.addEventListener('dragover', e => {
+            if (dragSessionSrcId) return;
             e.preventDefault();
             e.dataTransfer.dropEffect = 'move';
             document.querySelectorAll('.prompt-card').forEach(c => c.classList.remove('drag-over'));
             if (card.dataset.promptId !== dragSrcId) card.classList.add('drag-over');
           });
           card.addEventListener('drop', async e => {
+            if (dragSessionSrcId) return;
             e.preventDefault();
             card.classList.remove('drag-over');
             if (!dragSrcId || dragSrcId === card.dataset.promptId) return;
@@ -878,6 +894,56 @@
               db.from('prompts').update({ sort_order: u.sort_order }).eq('id', u.id)
             ));
             showToast('순서가 저장되었습니다.');
+          });
+        });
+      }
+
+      function attachSessionDragListeners() {
+        if (!isAdmin) return;
+        document.querySelectorAll('.session-group[draggable="true"]').forEach(group => {
+          group.addEventListener('dragstart', e => {
+            if (e.target.closest('.prompt-card[draggable="true"]')) return;
+            dragSrcId = null;
+            dragSessionSrcId = group.dataset.sessionGroupId;
+            group.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+          });
+          group.addEventListener('dragend', () => {
+            group.classList.remove('dragging');
+            document.querySelectorAll('.session-group').forEach(g => g.classList.remove('drag-over'));
+            dragSessionSrcId = null;
+          });
+          group.addEventListener('dragover', e => {
+            if (!dragSessionSrcId) return;
+            if (e.target.closest('.prompt-card')) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            document.querySelectorAll('.session-group').forEach(g => g.classList.remove('drag-over'));
+            if (group.dataset.sessionGroupId !== dragSessionSrcId) group.classList.add('drag-over');
+          });
+          group.addEventListener('drop', async e => {
+            if (!dragSessionSrcId) return;
+            e.preventDefault();
+            group.classList.remove('drag-over');
+            if (dragSessionSrcId === group.dataset.sessionGroupId) { dragSessionSrcId = null; return; }
+
+            const list = document.getElementById('session-list');
+            const groups = [...list.querySelectorAll('.session-group[draggable="true"]')];
+            const srcEl = list.querySelector(`.session-group[data-session-group-id="${dragSessionSrcId}"]`);
+            const srcIdx = groups.indexOf(srcEl);
+            const dstIdx = groups.indexOf(group);
+
+            if (srcIdx < dstIdx) list.insertBefore(srcEl, group.nextSibling);
+            else list.insertBefore(srcEl, group);
+
+            const newOrder = [...list.querySelectorAll('.session-group[draggable="true"]')].map((g, i) => ({
+              id: parseInt(g.dataset.sessionGroupId), sort_order: i + 1
+            }));
+            await Promise.all(newOrder.map(u =>
+              db.from('sessions').update({ sort_order: u.sort_order }).eq('id', u.id)
+            ));
+            dragSessionSrcId = null;
+            showToast('교시 순서가 저장되었습니다.');
           });
         });
       }
