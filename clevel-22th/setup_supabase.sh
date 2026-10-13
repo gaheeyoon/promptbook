@@ -1,0 +1,412 @@
+#!/bin/bash
+# clevel-22th Supabase setup script
+# Run this from a machine with access to ovhgljplbsjaxzhgopgm.supabase.co
+
+SUPABASE_URL="https://ovhgljplbsjaxzhgopgm.supabase.co/rest/v1"
+API_KEY="sb_publishable_2xJjgkNh6LUPJ4nMoDtQeA_BGsBBiiZ"
+COURSE_ID="clevel-22th"
+
+call_api() {
+  local method="$1"
+  local endpoint="$2"
+  local data="$3"
+  curl -s -X "$method" "$SUPABASE_URL/$endpoint" \
+    -H "apikey: $API_KEY" \
+    -H "Authorization: Bearer $API_KEY" \
+    -H "Content-Type: application/json" \
+    -H "Prefer: return=representation" \
+    -d "$data"
+}
+
+echo "Creating sessions for $COURSE_ID..."
+
+# Create sessions
+S1=$(call_api POST "sessions" "{\"name\":\"1교시\",\"sort_order\":1,\"course_id\":\"$COURSE_ID\"}" | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['id'])")
+echo "1교시 session id: $S1"
+
+S2=$(call_api POST "sessions" "{\"name\":\"2교시\",\"sort_order\":2,\"course_id\":\"$COURSE_ID\"}" | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['id'])")
+echo "2교시 session id: $S2"
+
+S3=$(call_api POST "sessions" "{\"name\":\"3교시\",\"sort_order\":3,\"course_id\":\"$COURSE_ID\"}" | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['id'])")
+echo "3교시 session id: $S3"
+
+S4=$(call_api POST "sessions" "{\"name\":\"4교시\",\"sort_order\":4,\"course_id\":\"$COURSE_ID\"}" | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['id'])")
+echo "4교시 session id: $S4"
+
+SB=$(call_api POST "sessions" "{\"name\":\"Bonus\",\"sort_order\":5,\"course_id\":\"$COURSE_ID\"}" | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['id'])")
+echo "Bonus session id: $SB"
+
+insert_prompt() {
+  local session_id="$1"
+  local order="$2"
+  local text="$3"
+  local escaped=$(echo "$text" | python3 -c "import sys,json; print(json.dumps(sys.stdin.read().rstrip('\n')))")
+  call_api POST "prompts" "{\"text\":$escaped,\"session_id\":$session_id,\"sort_order\":$order}" > /dev/null
+  echo "  Inserted prompt $order"
+}
+
+echo ""
+echo "Inserting 1교시 prompts..."
+insert_prompt $S1 1 '나의 커스텀 인스트럭션을 만들어줘.
+내가 직접 작성하는 게 아니라, 너가 나한테 질문을 하면서 정보를 모아줘.
+
+규칙:
+- 질문은 한 번에 하나씩만 해줘
+- 내 답변을 듣고 나서 다음 질문을 만들어줘
+- 앞에서 들은 내용을 바탕으로 자연스럽게 이어지는 질문을 해줘
+- 정보가 충분히 모였다고 판단되면 커스텀 인스트럭션 초안을 만들어줘
+
+지금 첫 번째 질문부터 시작해줘.'
+
+echo ""
+echo "Inserting 2교시 prompts..."
+insert_prompt $S2 1 '스킬 추가해줘.
+
+[proposal-review_Skill.zip]'
+
+insert_prompt $S2 2 '첨부한 기획서를 검토해줘.
+
+[세움_멤버십_사업추진안.docx]'
+
+insert_prompt $S2 3 '아래 스킬을 만들기 위한 프롬프트를 작성해줘.
+
+- 제안서, 보고서를 검토하는 스킬
+- 어떤 부분을 어떻게 수정하면 좋을지 정리
+- 5명의 가상의 인물이 제안서/보고서를 살펴보고 평가
+- 워드 파일정리'
+
+insert_prompt $S2 4 '보고서와 기획서를 검토하고 한국어 Word 검토 보고서를 만드는 나만의 Skill을 새로 만들어줘. 아래 기능과 보고서 구조를 포함해줘. 만든 Skill을 선택한 뒤 "첨부한 기획서를 검토해줘."라고만 요청해도 동작하게 해줘.
+
+[필수 기능]
+1. 첨부 기획서의 본문·표·별첨과 추가 근거를 읽고 연결해 검토할 것.
+2. CEO·CFO·고객·반대자 네 관점으로 검토할 것. 각각 전략과 자원 배분, 손익과 현금흐름, 고객 문제와 구매·도입, 반증과 실패 경로를 다룰 것.
+3. 긴 기획서를 요약하고 승인 요청과 의사결정 쟁점을 정리할 것.
+4. 근거 부족·논리 비약·자료 불일치·누락 비용·실행 위험을 찾고, 지적마다 원문 인용과 위치 및 대조 근거를 붙일 것.
+5. 숫자·기간·단위를 검산하고 관측 사실, 제안자의 가정, 검토자의 추론을 구분할 것. 없는 정보를 만들어 채우거나 초기 투자를 무조건 운영비에 더하지 말 것.
+6. 타당한 내용도 인정하고 네 관점의 중복 지적은 합칠 것. 서로 충돌하는 판단은 남길 것. 반대자 관점이라고 무조건 반려하지 말 것.
+7. 최종 결재는 사용자가 한다는 전제에서 종합 의견과 승인 전 확인 자료, 책임 역할 제안, 확인 시점을 제시할 것.
+8. 한국어 Word 검토 보고서를 실제 파일로 생성할 것.'
+
+insert_prompt $S2 5 '매일 오전 7시에 일정과 이메일을 바탕으로 아침 브리핑을 만들어줘.
+
+- 오늘 일정, 대응이 필요한 주요 메일 정리해줘.
+- 회신이 필요한 메일은 답장을 미리 작성해줘.
+  (보내지는 마 전송 버튼은 내가 누를거야)
+- 오늘 우선할 일 세 가지와 이유를 전체 열 줄 안에 정리해줘.'
+
+insert_prompt $S2 6 '매일 오후 6시 30분에 오늘 진행 상황과 내일 우선순위를 정리해줘.
+확인된 완료 사항, 미완료·미확인 사항, 내일 먼저 할 일 세 가지를 전체 열 줄 안에 써줘.
+일정이 지났다는 이유만으로 완료라고 판단하지 마.
+참조할 기록을 읽을 수 없으면 무엇을 제공해야 하는지 알려줘.'
+
+insert_prompt $S2 7 '매주 월요일 오전 8시에 [우리 업계]와 [경쟁사 세 곳]의 지난 일주일 변화를 조사해줘.
+제품 출시·가격 변경·투자·규제 중 우리 의사결정에 영향을 주는 소식 최대 세 가지를 정리해줘.
+각 항목에 발표일과 출처 링크를 붙이고, 확인된 사실과 시사점을 구분해줘.
+확인된 변화가 없으면 변화 없음이라고 적어줘.'
+
+insert_prompt $S2 8 '회의 중 음성으로 기록된 원본 텍스트야.
+내용을 다듬어서 공식 회의록 형식으로 정리해줘.
+
+[조건]
+제목 / 일시 / 참석자 / 회의 목적
+발언자별 발언 요지 정리
+중복 발언 · 불필요한 추임새 제거
+의사결정 내용 별도 표시
+한국어 경어체
+
+01_임원회의 STT 데이터.txt'
+
+insert_prompt $S2 9 '위 회의록을 바탕으로 정리해줘.
+
+[출력 형식 1 — 결정사항]
+| 번호 | 결정 내용 | 비고 |
+
+[출력 형식 2 — 액션아이템]
+| 담당자 | 할 일 | 기한 | 우선순위 |
+
+[출력 형식 3 — 리스크]
+| 리스크 | 예상 영향 | 대응 방향 |
+
+담당자 없으면 '"'"'미지정'"'"', 기한 없으면 '"'"'협의 필요'"'"'
+우선순위: 높음 / 보통 / 낮음'
+
+echo ""
+echo "Inserting 3교시 prompts..."
+insert_prompt $S3 1 '이 파일은 2025년 1월부터 2026년 6월까지의 사업부별 월별 매출이야.
+세 사업부를 각각 꺾은선으로 보여줘. 전사 합계는 빼고.
+
+01_세움_월별_매출현황.xlsx'
+
+insert_prompt $S3 2 '이번엔 전사 합계와 월 목표를 같이 보여줘.
+목표를 넘긴 달과 못 넘긴 달이 한눈에 보이게.'
+
+insert_prompt $S3 3 '2026년 상반기를 2025년 같은 기간과 비교해줘.
+사업부별로 증감률을 구하고, 마이너스는 빨간색으로 표시해줘.'
+
+insert_prompt $S3 4 '이 그래프를 보고 내가 이사회에서 받을 질문 세 개를 뽑아줘.
+질문마다 답이 이 파일 안에 있는지 없는지 표시해줘.'
+
+insert_prompt $S3 5 '우리 회사 상반기 실적 자료야. 시트가 여러 개 있어.
+전부 열어 보고 아래 세 가지로 정리해줘.
+
+1. 이 자료에서 읽히는 것 세 줄
+2. 이 자료만으로는 알 수 없는 것 세 줄
+3. 내가 다음 회의에서 물어야 할 질문 세 개(누구에게 물을지도)
+
+추측해서 채우지 마. 자료에 없으면 없다고 해.
+
+02_세움_경영실적_종합.xlsx'
+
+insert_prompt $S3 6 '시트끼리 숫자가 어긋나는 곳이 있는지 전부 대조해줘.
+어긋나면 양쪽 숫자를 나란히 적어줘.'
+
+insert_prompt $S3 7 '홈케어 사업부 자료야.
+2026년 상반기 영업이익이 작년 같은 기간보다 많이 줄었어.
+매출은 오히려 늘었는데 왜 이익이 줄었는지 찾아줘.
+
+03_세움_홈케어_손익원가분석.xlsx'
+
+insert_prompt $S3 8 '원인을 네 가지로 나눠서 각각 몇 억 원짜리인지 숫자로 보여줘.
+
+- 판매수량 변화
+- 평균 판매단가 변화
+- 단위 원가 변화
+- 판매관리비 변화
+
+2025년 상반기 영업이익에서 시작해서 네 가지를 더하고 빼면 2026년 상반기 영업이익이 나오도록 해줘. 계산이 맞는지 확인하고.'
+
+insert_prompt $S3 9 '평균 판매단가가 떨어졌다고 했는데, 채널별 판매단가는 그대로야.
+그런데 왜 평균이 떨어졌어?'
+
+insert_prompt $S3 10 '지금까지 찾은 걸 이사회 보고용으로 정리해줘.
+
+맨 앞에 결론 한 줄, 그다음 원인 네 가지를 금액 순으로, 마지막에 내가 결정해야 할 것 세 가지.
+
+워드 파일로 만들어줘.'
+
+insert_prompt $S3 11 '지금 이 데이터로 경영 현황판을 하나 만들려고 해.
+만들기 전에 화면 구성을 글로 먼저 보여줘.
+
+03_세움_홈케어_손익원가분석.xlsx'
+
+insert_prompt $S3 12 '좋아. 이제 만들어줘.
+
+화면 왼쪽 사이드바에 슬라이더 네 개를 두고 아래 값을 조정할 수 있게 해줘.
+판매단가 조정 / 판매수량 조정 / 원료가 조정 / 대형마트 비중
+
+슬라이더를 움직이면 오른쪽 숫자가 바로 따라 바뀌어야 해.
+오른쪽에는 매출 · 영업이익 · 영업이익률을 크게 보여주고, 그 밑에 월별 영업이익 그래프를 두고. 2026년 상반기 실적을 기준선으로 회색 점선으로 같이 그려줘.'
+
+insert_prompt $S3 13 '이걸 사이트로 만들어줘. 주소를 받고 싶어.'
+
+insert_prompt $S3 14 '슬라이더를 다 0으로 되돌리는 버튼을 하나 넣어줘.
+영업이익이 마이너스가 되면 숫자를 빨간색으로 보여줘.'
+
+insert_prompt $S3 15 '- 우리 회사에서는 보안 때문에 영업 실적을 업로드 할 수 없어
+- 엑셀 파일을 업로드하면, 대시보드를 보여주는 로컬에서 동작하는 웹페이지를 만들고 싶어.
+- 엑셀 파일은 첨부한 엑셀 파일과 같은 형식이야.
+- 서버 없이도 실행할 수 있게 html 파일 하나로만 만들어줘.
+- 아래 내용을 시각화해서 볼 수 있는 대시보드를 만들어줘.
+
+담당자별 판매금액 합계
+월별 판매 추이
+
+04_KPI조직리스크.xlsx'
+
+insert_prompt $S3 16 '이 파일은 (회사명)의 최근 3개년 재무제표야.
+
+1. 매출, 영업이익, 순이익 추이 그래프로 보여줘
+2. 영업이익률 변화 분석해줘
+3. 주요 재무 지표 요약해줘
+
+07_[NAVER]사업보고서(2025.03.18).pdf, 07_[카카오][정정]사업보고서(2025.03.24).pdf'
+
+insert_prompt $S3 17 '두 회사 재무제표를 비교해줘.
+
+1. 매출 성장률 비교
+2. 영업이익률 비교
+3. 어느 회사가 더 건강한지 분석해줘'
+
+insert_prompt $S3 18 'CEO 관점에서 분석해줘.
+
+1. A사가 B사를 앞선 핵심 이유 3가지
+2. 뒤처진 회사가 개선해야 할 점
+3. 두 회사에서 배울 수 있는 경영 교훈'
+
+echo ""
+echo "Inserting 4교시 prompts..."
+insert_prompt $S4 1 '✔ 아이디어가 없다
+나한테 질문을 던져서 사업 아이디어를 찾게 해줘. 한 번에 두세 개씩만 물어봐.
+
+✔ 방향만 있다
+우리 회사는 [이런 곳]이고 [이쪽]에 관심이 있어. 사업 아이디어 세 개를 제안해줘.
+
+✔ 이미 구상 중인 게 있다
+내가 구상 중인 건 [이런] 거야. 강점과 빈 곳을 같이 짚어줘.'
+
+insert_prompt $S4 2 '우리 회사 사정을 먼저 알려줄게.
+
+[업종과 규모]
+...
+[지금 주력으로 하는 일]
+...
+[쓸 수 있는 예산과 인력의 범위]
+...
+[하면 안 되는 것]
+...
+이걸 전제로 아까 나온 걸 다시 정리해줘.'
+
+insert_prompt $S4 3 '신사업으로 확정하기 전에, 네가 아직 모르는 것 중 꼭 알아야 하는 것만 다섯 개 물어봐. 한 번에 하나씩 묻고, 내 답을 듣고 다음 질문을 정해.'
+
+insert_prompt $S4 4 '여기까지 나온 내용을 정리해줘.
+
+[사업명]                                    [핵심 가치 제안]
+[한 줄 설명]                              - 우리가 제공하는 가치
+                                                - 경쟁사 대비 차별점
+[해결하는 문제]
+- 고객이 겪는 문제점              [예상 수익 모델]
+- 기존 해결책의 한계
+                                                [검증이 필요한 질문]
+[타겟 고객]                              1. 시장 규모는?
+- 주요 고객군                          2. 경쟁사는?
+- 고객 특성                             3. 고객이 실제로 원하는가?'
+
+insert_prompt $S4 5 '지금 정리한 안건을 사업으로 만들 수 있는 방식을 조사해서 후보 세 개로 정리해줘.
+국내외 사례를 찾아보고, 출처를 같이 적어줘.
+
+(리서치해줘.)'
+
+insert_prompt $S4 6 '세 후보를 네 가지 기준으로 비교해서 표로 보여줘.
+
+| 시장이 충분한가 | 우리가 할 수 있는가 | 우리 강점을 쓰는가 | 차별점이 있는가 |
+
+상·중·하로 표시하고, 네가 추천하는 하나도 이유와 같이 적어줘.'
+
+insert_prompt $S4 7 '선정한 후보의 국내 시장 규모를 추정해줘.
+산정 근거를 단계별로 숫자로 제시하고, 인용한 자료의 출처를 함께 적어줘.'
+
+insert_prompt $S4 8 '같은 사업을 하고 있는 국내 3개사, 해외 3개사를 선정해서 표로 정리해줘.
+기업별로 사업 단계, 수익 모델, 최근 투자·제휴 동향, 우리와의 차별 요소.
+
+확인되지 않는 항목은 비워 둔 다음 표시해줘.'
+
+insert_prompt $S4 9 '@my-proposal-review
+지금까지 정리한 이 기획을 my-proposal-review 스킬로 검토해줘.'
+
+insert_prompt $S4 10 '네가 우리 회사 투자심의위원회 위원이라고 생각해.
+이 기획을 승인하지 않을 이유를 다섯 개 들어줘.'
+
+insert_prompt $S4 11 '이제 그 다섯 개를 한 번에 하나씩 물어봐.
+내가 답하면 그 답을 파고들어서 다시 물어줘. 봐주지 마.'
+
+insert_prompt $S4 12 '방금 내가 제대로 답하지 못한 질문만 모아줘.
+질문마다 무엇을 더 알아봐야 답할 수 있는지 한 줄씩 적어줘.'
+
+insert_prompt $S4 13 '지금까지 한 걸 이사회 보고 장표로 만들 거야.
+만들기 전에 목차만 먼저 보여줘. 여섯에서 열두 장 사이로.'
+
+insert_prompt $S4 14 '[지침 첨부]
+
+이 디자인 지침대로 장표를 만들어줘.
+목차는 방금 정한 그대로, 장마다 제목과 본문을 적어줘.'
+
+insert_prompt $S4 15 '이 기획을 10분 안에 설명해야 해.
+
+말로 할 대본을 써줘. 숫자는 세 개만 넣고.
+마지막에 상대가 물어올 질문 세 개도 같이 적어줘.'
+
+echo ""
+echo "Inserting Bonus prompts..."
+insert_prompt $SB 1 '한국인이 많이 먹는 점심 메뉴 100개를 조사하고,
+'"'"'오늘 점심 뭐 먹지?'"'"' 앱을 만들어줘.
+실제로 작동하는 하나의 HTML 파일로.
+
+- [뽑기] 버튼을 누르면 목록에서 랜덤으로 하나를 두구두구 애니메이션과 함께 크게 보여줘
+- 디자인은 밝고 재미있게'
+
+insert_prompt $SB 2 '이 앱을 업그레이드해줘. 하나의 HTML 파일 유지.
+
+- 뽑은 메뉴와 날짜를 로컬스토리지에 저장
+- 최근 7일 안에 나온 메뉴는 뽑기에서 자동 제외
+(전부 제외되면 기록을 초기화하고 알려줘)
+- 최근 뽑기 기록 7개를 아래에 표시'
+
+insert_prompt $SB 3 '나는 제조업 구매팀 실무자야.
+매주 '"'"'발주 → 입고 스케줄 계산'"'"'을 손으로 하고 있어. 이 업무를 자동화하는 웹앱의 미니 PRD를 작성해줘.
+
+[미니 PRD 형식]
+- 한 줄 소개
+- 입력: 사용자가 넣는 것
+- 처리: 계산·판정 규칙
+- 출력: 화면에 보여줄 것
+- 예외: 이런 경우는 이렇게
+
+내 업무 상황:
+- 품목마다 발주일, 리드타임(일), 필요일(현장 요구일)이 달라
+- 입고예정일 = 발주일 + 리드타임
+- 입고예정일이 필요일보다 늦으면 큰일 (미리 알아야 함)'
+
+insert_prompt $SB 4 '아래 미니 PRD대로 작동하는 웹앱을 만들어줘.
+실제로 작동하는 하나의 HTML 파일로.
+
+[미니 PRD 전체 붙여넣기]
+
+추가 요구:
+- 행 추가/삭제 가능, 예시 데이터 5행 미리 입력
+- 지연 위험 행은 빨간색 + '"'"'지연 위험'"'"' 배지
+- 입력한 데이터는 로컬스토리지에 자동 저장
+- CSV(엑셀) 내보내기 버튼'
+
+insert_prompt $SB 5 '첨부한 재고 시트(품목코드/현재고/안전재고/월평균사용량/리드타임)로
+'"'"'적정 재고 자동 발주 알림'"'"' 대시보드를 만들어줘. 하나의 HTML 파일로.
+
+- 현재고가 안전재고 미만인 품목은 빨간색, 상단에 발주 필요 품목 수
+- 적정 발주량 제안: 월평균사용량÷30 × 리드타임 + 안전재고 – 현재고 (올림)
+- 발주 필요 품목만 CSV 내보내기'
+
+echo ""
+echo "Copying GPTs instructions from clevel-21th..."
+# Fetch existing instructions from clevel-21th
+INSTRUCTIONS=$(curl -s -X GET "$SUPABASE_URL/instructions?course_id=eq.clevel-21th&select=*&order=sort_order" \
+  -H "apikey: $API_KEY" \
+  -H "Authorization: Bearer $API_KEY")
+
+echo "$INSTRUCTIONS" | python3 - << 'PYEOF'
+import sys, json
+
+data = json.loads(sys.stdin.read())
+SUPABASE_URL = "https://ovhgljplbsjaxzhgopgm.supabase.co/rest/v1"
+API_KEY = "sb_publishable_2xJjgkNh6LUPJ4nMoDtQeA_BGsBBiiZ"
+
+import urllib.request
+
+for item in data:
+    new_item = {
+        "name": item["name"],
+        "sort_order": item["sort_order"],
+        "course_id": "clevel-22th"
+    }
+    if item.get("link"):
+        new_item["link"] = item["link"]
+    if item.get("text"):
+        new_item["text"] = item["text"]
+
+    payload = json.dumps(new_item).encode()
+    req = urllib.request.Request(
+        f"{SUPABASE_URL}/instructions",
+        data=payload,
+        headers={
+            "apikey": API_KEY,
+            "Authorization": f"Bearer {API_KEY}",
+            "Content-Type": "application/json",
+            "Prefer": "return=minimal"
+        },
+        method="POST"
+    )
+    with urllib.request.urlopen(req) as response:
+        print(f"  Copied instruction: {item['name']}")
+
+PYEOF
+
+echo ""
+echo "Done! clevel-22th Supabase data setup complete."
