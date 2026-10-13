@@ -18,31 +18,80 @@ call_api() {
     -d "$data"
 }
 
-echo "Creating sessions for $COURSE_ID..."
+echo "=== Cleaning up existing clevel-22th data ==="
 
-# Create sessions
-S1=$(call_api POST "sessions" "{\"name\":\"1교시\",\"sort_order\":1,\"course_id\":\"$COURSE_ID\"}" | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['id'])")
+# Delete existing prompts (via sessions)
+EXISTING_SESSION_IDS=$(curl -s "$SUPABASE_URL/sessions?course_id=eq.$COURSE_ID&select=id" \
+  -H "apikey: $API_KEY" \
+  -H "Authorization: Bearer $API_KEY" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+ids = [str(row['id']) for row in data]
+if ids:
+    print(','.join(ids))
+")
+
+if [ -n "$EXISTING_SESSION_IDS" ]; then
+  echo "Deleting prompts for session ids: $EXISTING_SESSION_IDS"
+  for SID in $(echo "$EXISTING_SESSION_IDS" | tr ',' '\n'); do
+    curl -s -X DELETE "$SUPABASE_URL/prompts?session_id=eq.$SID" \
+      -H "apikey: $API_KEY" \
+      -H "Authorization: Bearer $API_KEY" > /dev/null
+  done
+  echo "Deleting existing sessions..."
+  curl -s -X DELETE "$SUPABASE_URL/sessions?course_id=eq.$COURSE_ID" \
+    -H "apikey: $API_KEY" \
+    -H "Authorization: Bearer $API_KEY" > /dev/null
+  echo "Cleanup done."
+else
+  echo "No existing sessions found — starting fresh."
+fi
+
+echo ""
+echo "=== Creating sessions for $COURSE_ID ==="
+
+create_session() {
+  local name="$1"
+  local order="$2"
+  local response
+  response=$(call_api POST "sessions" "{\"name\":\"$name\",\"sort_order\":$order,\"course_id\":\"$COURSE_ID\"}")
+  local sid
+  sid=$(echo "$response" | python3 -c "import sys,json; data=json.load(sys.stdin); print(data[0]['id'])" 2>/dev/null)
+  if [ -z "$sid" ]; then
+    echo "ERROR: Failed to create session '$name'. Response: $response" >&2
+    exit 1
+  fi
+  echo "$sid"
+}
+
+S1=$(create_session "1교시" 1)
 echo "1교시 session id: $S1"
 
-S2=$(call_api POST "sessions" "{\"name\":\"2교시\",\"sort_order\":2,\"course_id\":\"$COURSE_ID\"}" | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['id'])")
+S2=$(create_session "2교시" 2)
 echo "2교시 session id: $S2"
 
-S3=$(call_api POST "sessions" "{\"name\":\"3교시\",\"sort_order\":3,\"course_id\":\"$COURSE_ID\"}" | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['id'])")
+S3=$(create_session "3교시" 3)
 echo "3교시 session id: $S3"
 
-S4=$(call_api POST "sessions" "{\"name\":\"4교시\",\"sort_order\":4,\"course_id\":\"$COURSE_ID\"}" | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['id'])")
+S4=$(create_session "4교시" 4)
 echo "4교시 session id: $S4"
 
-SB=$(call_api POST "sessions" "{\"name\":\"Bonus\",\"sort_order\":5,\"course_id\":\"$COURSE_ID\"}" | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['id'])")
+SB=$(create_session "Bonus" 5)
 echo "Bonus session id: $SB"
 
 insert_prompt() {
   local session_id="$1"
   local order="$2"
   local text="$3"
-  local escaped=$(echo "$text" | python3 -c "import sys,json; print(json.dumps(sys.stdin.read().rstrip('\n')))")
-  call_api POST "prompts" "{\"text\":$escaped,\"session_id\":$session_id,\"sort_order\":$order}" > /dev/null
-  echo "  Inserted prompt $order"
+  local escaped
+  escaped=$(echo "$text" | python3 -c "import sys,json; print(json.dumps(sys.stdin.read().rstrip('\n')))")
+  local response
+  response=$(call_api POST "prompts" "{\"text\":$escaped,\"session_id\":$session_id,\"sort_order\":$order}")
+  if echo "$response" | python3 -c "import sys,json; data=json.load(sys.stdin); exit(0 if data else 1)" 2>/dev/null; then
+    echo "  Inserted prompt $order"
+  else
+    echo "  ERROR inserting prompt $order: $response" >&2
+  fi
 }
 
 echo ""
@@ -363,50 +412,6 @@ insert_prompt $SB 5 '첨부한 재고 시트(품목코드/현재고/안전재고
 - 현재고가 안전재고 미만인 품목은 빨간색, 상단에 발주 필요 품목 수
 - 적정 발주량 제안: 월평균사용량÷30 × 리드타임 + 안전재고 – 현재고 (올림)
 - 발주 필요 품목만 CSV 내보내기'
-
-echo ""
-echo "Copying GPTs instructions from clevel-21th..."
-# Fetch existing instructions from clevel-21th
-INSTRUCTIONS=$(curl -s -X GET "$SUPABASE_URL/instructions?course_id=eq.clevel-21th&select=*&order=sort_order" \
-  -H "apikey: $API_KEY" \
-  -H "Authorization: Bearer $API_KEY")
-
-echo "$INSTRUCTIONS" | python3 - << 'PYEOF'
-import sys, json
-
-data = json.loads(sys.stdin.read())
-SUPABASE_URL = "https://ovhgljplbsjaxzhgopgm.supabase.co/rest/v1"
-API_KEY = "sb_publishable_2xJjgkNh6LUPJ4nMoDtQeA_BGsBBiiZ"
-
-import urllib.request
-
-for item in data:
-    new_item = {
-        "name": item["name"],
-        "sort_order": item["sort_order"],
-        "course_id": "clevel-22th"
-    }
-    if item.get("link"):
-        new_item["link"] = item["link"]
-    if item.get("text"):
-        new_item["text"] = item["text"]
-
-    payload = json.dumps(new_item).encode()
-    req = urllib.request.Request(
-        f"{SUPABASE_URL}/instructions",
-        data=payload,
-        headers={
-            "apikey": API_KEY,
-            "Authorization": f"Bearer {API_KEY}",
-            "Content-Type": "application/json",
-            "Prefer": "return=minimal"
-        },
-        method="POST"
-    )
-    with urllib.request.urlopen(req) as response:
-        print(f"  Copied instruction: {item['name']}")
-
-PYEOF
 
 echo ""
 echo "Done! clevel-22th Supabase data setup complete."
